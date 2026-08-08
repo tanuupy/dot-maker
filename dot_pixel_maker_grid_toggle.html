@@ -1,0 +1,355 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>ドット絵メイカー</title>
+<style>
+:root{--bg:#eef4f7;--panel:#fff;--line:#cbd8df;--accent:#32a7bc;--text:#20313b}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Yu Gothic",sans-serif}
+body{padding:3px 18px 20px 3px;overflow-y:auto;-webkit-text-size-adjust:100%}
+.app{max-width:720px;margin:auto;display:grid;gap:3px}
+.panel{background:#fff;border:1px solid var(--line);border-radius:7px;padding:3px}
+button,.filebtn{border:1px solid var(--line);background:#fff;border-radius:5px;min-height:24px;padding:2px 4px;font-size:9px;color:var(--text);transition:transform .08s,background .08s,box-shadow .08s;touch-action:pan-y}
+button.active{background:#dcf7fb;border-color:var(--accent);font-weight:700}
+button.pressed,.filebtn.pressed{transform:scale(.93);box-shadow:inset 0 1px 4px #0003}
+.top{display:grid;grid-template-columns:minmax(0,1fr) 31%;gap:3px}
+.left{display:grid;gap:3px}
+.controls{display:grid;grid-template-columns:38% 62%;gap:3px}
+.tools{display:grid;grid-template-columns:1fr 1fr;gap:2px}
+.edit{display:grid;grid-template-columns:repeat(3,1fr);gap:2px}
+.preview{display:grid;grid-template-rows:1fr auto;gap:2px}
+.previewbox{aspect-ratio:1;border:1px solid var(--line);border-radius:5px;overflow:hidden;background:#fafcfd}
+#preview{width:100%;height:100%;display:block;image-rendering:pixelated;touch-action:none}
+.previewzoom{display:grid;grid-template-columns:1fr 1fr;gap:2px}
+.paletteTop{display:grid;grid-template-columns:28px 58px 28px 46px 46px;gap:2px;align-items:center;margin-bottom:2px}
+#picker,#bgPicker{width:28px;height:23px;padding:0;border:1px solid var(--line);border-radius:4px}
+#hex{font-size:7px;overflow:hidden}
+#palette{display:grid;grid-template-columns:repeat(17,1fr);gap:1px}
+.color{aspect-ratio:1;border-radius:3px;padding:0;min-height:0}
+.transparent{background:linear-gradient(45deg,#d9e1e5 25%,#fff 25%,#fff 75%,#d9e1e5 75%);background-size:7px 7px;position:relative}
+.transparent:after{content:"×";position:absolute;inset:0;display:grid;place-items:center;color:#d44;font-size:8px;font-weight:bold}
+.saved{display:grid;grid-template-columns:1fr 1fr;gap:2px;margin-top:2px}
+#favorites,#recent{display:grid;grid-template-columns:repeat(8,1fr);gap:1px;min-height:14px}
+.size{display:grid;grid-template-columns:repeat(4,1fr);gap:2px}
+.canvasWrap{width:100%;aspect-ratio:1;overflow:hidden;position:relative;background:#fff;border:1px solid var(--line);border-radius:7px;touch-action:none}
+#canvas{display:block;position:absolute;image-rendering:pixelated;touch-action:none;cursor:crosshair}
+.zoomBtns{position:absolute;right:4px;bottom:4px;display:grid;grid-template-columns:28px 28px;gap:2px;z-index:5}
+.zoomBtns button{font-size:16px;background:#fffd;padding:0}
+.io{display:grid;grid-template-columns:1fr 1fr;gap:3px}
+.ioCol{display:grid;grid-template-columns:1fr 1fr;gap:2px}
+.ioTitle{grid-column:1/-1;text-align:center;font-size:8px}
+.filebtn{display:grid;place-items:center}.filebtn input{display:none}
+.slotsTools{display:grid;grid-template-columns:repeat(5,1fr);gap:2px;margin-bottom:3px}
+#slots{display:grid;grid-template-columns:repeat(10,1fr);gap:2px}
+.slot{padding:1px;min-height:0;background:#fff;position:relative}
+.slot.selected{border:2px solid var(--accent);background:#dff8fc;box-shadow:0 0 0 2px #32a7bc44;transform:scale(1.04);z-index:2}
+.slot span{display:block;font-size:6px;text-align:center;line-height:1}
+.slot canvas{width:100%;aspect-ratio:1;display:block;image-rendering:pixelated;background:linear-gradient(45deg,#e7edf0 25%,#fff 25%,#fff 75%,#e7edf0 75%);background-size:6px 6px}
+#rail{position:fixed;right:3px;top:8px;bottom:8px;width:13px;background:#6d829322;border-radius:10px;z-index:9999;touch-action:none}
+#thumb{position:absolute;left:2px;width:9px;min-height:44px;background:#32a7bccf;border-radius:10px}
+@media(min-width:700px){.app{max-width:980px}.top{grid-template-columns:minmax(0,1fr) 220px}.canvasWrap{width:min(72vh,720px);margin:auto}}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="top">
+    <div class="left">
+      <div class="controls">
+        <div class="panel tools">
+          <button data-tool="pen" class="active">ペン</button><button data-tool="eraser">消しゴム</button>
+          <button data-tool="dropper">スポイト</button><button data-tool="fill">塗りつぶし</button>
+        </div>
+        <div class="panel edit">
+          <button id="undo">元に戻す</button><button id="redo">やり直す</button><button id="sym">左右対称</button>
+          <button data-tool="select">選択</button><button id="copy">コピー</button><button id="paste">貼り付け</button>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="paletteTop">
+          <input id="picker" type="color" value="#5b3a29"><span id="hex">#5B3A29</span>
+          <input id="bgPicker" type="color" value="#ffffff"><button id="fav">★保存</button><button id="grid" class="active">マス目ON</button>
+        </div>
+        <div id="palette"></div>
+        <div class="saved"><div id="favorites"></div><div id="recent"></div></div>
+      </div>
+    </div>
+    <div class="panel preview">
+      <div class="previewbox"><canvas id="preview"></canvas></div>
+      <div class="previewzoom"><button id="pzout">−</button><button id="pzin">＋</button></div>
+    </div>
+  </div>
+
+  <div class="panel size">
+    <button data-size="32" class="active">32px</button><button data-size="64">64px</button><button data-size="128">128px</button><button id="clear">全消去</button>
+  </div>
+
+  <div class="canvasWrap" id="viewport">
+    <canvas id="canvas"></canvas>
+    <div class="zoomBtns"><button id="zout">−</button><button id="zin">＋</button></div>
+  </div>
+
+  <div class="panel io">
+    <div class="ioCol"><div class="ioTitle">読み込み</div><label class="filebtn">PNG<input id="loadPng" type="file" accept="image/png"></label><label class="filebtn">JSON<input id="loadJson" type="file" accept="application/json"></label></div>
+    <div class="ioCol"><div class="ioTitle">保存</div><button id="savePng" style="grid-column:1/-1">PNG保存</button></div>
+  </div>
+
+  <div class="panel">
+    <div class="slotsTools"><button id="slotSave">仮保存</button><button id="slotLoad">読込</button><button id="slotBg">背景</button><button id="slotDelete">消去</button><button id="bgReset">背景リセット</button></div>
+    <div id="slots"></div>
+  </div>
+</div>
+<div id="rail"><div id="thumb"></div></div>
+
+<script>
+"use strict";
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const canvas=$("#canvas"), ctx=canvas.getContext("2d"), preview=$("#preview"), pctx=preview.getContext("2d"), viewport=$("#viewport");
+const paletteEl=$("#palette"), favoritesEl=$("#favorites"), recentEl=$("#recent"), picker=$("#picker"), bgPicker=$("#bgPicker"), hex=$("#hex");
+let N=32, pixels=[], tool="pen", color="#5B3A29", bg="#FFFFFF", grid=true, symmetry=false;
+let zoom=1, panX=0, panY=0, drawing=false, lastCell=null, gesture=false, pinch=null;
+let undoStack=[], redoStack=[], clipboard=null, selection=null, selectStart=null;
+let favorites=[], recent=[], slots=Array(50).fill(null), selectedSlot=null, bgRef=null;
+const PALETTE=["#000000","#FFFFFF","#5B3A29","#7A5136","#A46B47","#D19A6A","#F1C6A8","#FFE0C7","#F6D2BC","#C73B3B","#E86B6B","#F4A261","#FFD166","#73C66B","#2FA36B","#3AA7B9","#4D79C7","#5C5CD6","#7B5BC7","#A85BC7","#D45BA8","#7B8790","#AEB9C0","#DCE4E8","#263238","#37474F","#6D4C41","#8D6E63","#BCAAA4","#F8BBD0","#BBDEFB","#C8E6C9","#FFF9C4"];
+function blank(n=N){return Array.from({length:n},()=>Array(n).fill(null))}
+function clonePix(a=pixels){return a.map(r=>r.slice())}
+function initPixels(){pixels=blank();undoStack=[];redoStack=[]}
+function pushUndo(){undoStack.push(clonePix());if(undoStack.length>60)undoStack.shift();redoStack=[]}
+function setTool(t){tool=t;$$("[data-tool]").forEach(b=>b.classList.toggle("active",b.dataset.tool===t))}
+function addRecent(c){recent=[c,...recent.filter(x=>x!==c)].slice(0,8);renderSmallColors()}
+function chooseColor(c){color=c;if(c!==null){picker.value=c;hex.textContent=c}else hex.textContent="透明";addRecent(c);setTool("pen")}
+function colorButton(c){const b=document.createElement("button");b.className="color"+(c===null?" transparent":"");if(c!==null)b.style.background=c;b.onclick=()=>chooseColor(c);return b}
+function renderPalette(){paletteEl.innerHTML="";paletteEl.append(colorButton(null));PALETTE.forEach(c=>paletteEl.append(colorButton(c)))}
+function renderSmallColors(){favoritesEl.innerHTML="";favorites.forEach(c=>favoritesEl.append(colorButton(c)));recentEl.innerHTML="";recent.forEach(c=>recentEl.append(colorButton(c)))}
+function saveFavorites(){localStorage.setItem("pixelFavV1",JSON.stringify(favorites))}
+function fitBase(){return Math.max(1,Math.floor(viewport.clientWidth/N))}
+function draw(){
+  const cell=fitBase()*zoom, side=N*cell;
+  canvas.width=side;canvas.height=side;
+  canvas.style.width=side+"px";canvas.style.height=side+"px";
+  canvas.style.left=panX+"px";canvas.style.top=panY+"px";
+  ctx.imageSmoothingEnabled=false;
+  ctx.fillStyle=bg;ctx.fillRect(0,0,side,side);
+  if(bgRef){ctx.globalAlpha=.25;for(let y=0;y<Math.min(N,bgRef.length);y++)for(let x=0;x<Math.min(N,bgRef[y].length);x++){if(bgRef[y][x]){ctx.fillStyle=bgRef[y][x];ctx.fillRect(x*cell,y*cell,cell,cell)}}ctx.globalAlpha=1}
+  for(let y=0;y<N;y++)for(let x=0;x<N;x++){if(pixels[y][x]){ctx.fillStyle=pixels[y][x];ctx.fillRect(x*cell,y*cell,cell,cell)}}
+  if(grid&&cell>=4){ctx.strokeStyle="rgba(60,80,90,.25)";ctx.lineWidth=1;ctx.beginPath();for(let i=0;i<=N;i++){let q=Math.round(i*cell)+.5;ctx.moveTo(q,0);ctx.lineTo(q,side);ctx.moveTo(0,q);ctx.lineTo(side,q)}ctx.stroke()}
+  if(selection){ctx.strokeStyle="#00A9C4";ctx.lineWidth=2;ctx.setLineDash([5,3]);ctx.strokeRect(selection.x*cell+1,selection.y*cell+1,selection.w*cell-2,selection.h*cell-2);ctx.setLineDash([])}
+  drawPreview();
+}
+function drawPreview(){
+  const box=preview.parentElement, s=Math.max(1,Math.floor(Math.min(box.clientWidth,box.clientHeight)));
+  preview.width=s;preview.height=s;pctx.imageSmoothingEnabled=false;pctx.fillStyle=bg;pctx.fillRect(0,0,s,s);
+  const q=s/N;
+  for(let y=0;y<N;y++)for(let x=0;x<N;x++)if(pixels[y][x]){pctx.fillStyle=pixels[y][x];pctx.fillRect(x*q,y*q,Math.ceil(q),Math.ceil(q))}
+  const cell=fitBase()*zoom, side=N*cell;
+  const vx=Math.max(0,-panX)/side*s, vy=Math.max(0,-panY)/side*s;
+  const vw=Math.min(1,viewport.clientWidth/side)*s, vh=Math.min(1,viewport.clientHeight/side)*s;
+  pctx.strokeStyle="#00A9C4";pctx.lineWidth=2;pctx.strokeRect(vx,vy,vw,vh);
+}
+function eventPoint(e){const t=e.touches?e.touches[0]:e;const r=canvas.getBoundingClientRect();return{x:t.clientX-r.left,y:t.clientY-r.top}}
+function cellAt(e){const p=eventPoint(e), cell=canvas.width/N;return{x:Math.floor(p.x/cell),y:Math.floor(p.y/cell)}}
+function valid(c){return c.x>=0&&c.y>=0&&c.x<N&&c.y<N}
+function paint(c,val){if(!valid(c))return;pixels[c.y][c.x]=val;if(symmetry)pixels[c.y][N-1-c.x]=val}
+function linePaint(a,b,val){let x0=a.x,y0=a.y,x1=b.x,y1=b.y,dx=Math.abs(x1-x0),sx=x0<x1?1:-1,dy=-Math.abs(y1-y0),sy=y0<y1?1:-1,err=dx+dy;while(true){paint({x:x0,y:y0},val);if(x0===x1&&y0===y1)break;let e2=2*err;if(e2>=dy){err+=dy;x0+=sx}if(e2<=dx){err+=dx;y0+=sy}}}
+function flood(x,y,newC){const old=pixels[y][x];if(old===newC)return;const seen=new Uint8Array(N*N), st=[y*N+x];seen[y*N+x]=1;while(st.length){const i=st.pop(),cx=i%N,cy=(i/N)|0;if(pixels[cy][cx]!==old)continue;pixels[cy][cx]=newC;for(let yy=-1;yy<=1;yy++)for(let xx=-1;xx<=1;xx++){if(!xx&&!yy)continue;let nx=cx+xx,ny=cy+yy;if(nx<0||ny<0||nx>=N||ny>=N)continue;let ni=ny*N+nx;if(!seen[ni]&&pixels[ny][nx]===old){seen[ni]=1;st.push(ni)}}}}
+function beginDraw(e){
+  if(e.touches&&e.touches.length>1){gesture=true;drawing=false;return}
+  if(gesture)return;
+  const c=cellAt(e);if(!valid(c))return;
+  if(tool==="dropper"){chooseColor(pixels[c.y][c.x]);return}
+  if(tool==="fill"){pushUndo();flood(c.x,c.y,color);draw();return}
+  if(tool==="select"){selectStart=c;selection={x:c.x,y:c.y,w:1,h:1};drawing=true;draw();return}
+  pushUndo();drawing=true;lastCell=c;paint(c,tool==="eraser"?null:color);draw()
+}
+function moveDraw(e){
+  if(e.touches&&e.touches.length>1){gesture=true;drawing=false;return}
+  if(!drawing||gesture)return;
+  const c=cellAt(e);if(!valid(c))return;
+  if(tool==="select"){selection={x:Math.min(selectStart.x,c.x),y:Math.min(selectStart.y,c.y),w:Math.abs(c.x-selectStart.x)+1,h:Math.abs(c.y-selectStart.y)+1};draw();return}
+  linePaint(lastCell,c,tool==="eraser"?null:color);lastCell=c;draw()
+}
+function endDraw(){drawing=false;lastCell=null;selectStart=null}
+canvas.addEventListener("mousedown",e=>{if(e.button===0)beginDraw(e)});
+canvas.addEventListener("mousemove",moveDraw);window.addEventListener("mouseup",endDraw);
+/* Touch drawing is intentionally delayed a little.
+   If a second finger joins, the pending/started stroke is cancelled and restored,
+   so pinch/pan can NEVER leave a dot behind. */
+let touchDrawTimer=null, touchStartEvent=null, touchStrokeBackup=null, touchDrawingStarted=false;
+function cloneTouchEvent(e){
+  const t=e.touches&&e.touches[0];
+  if(!t)return null;
+  return {touches:[{clientX:t.clientX,clientY:t.clientY}]};
+}
+function cancelTouchStrokeForGesture(){
+  if(touchDrawTimer){clearTimeout(touchDrawTimer);touchDrawTimer=null}
+  touchStartEvent=null;
+  if(touchDrawingStarted && touchStrokeBackup){
+    pixels=touchStrokeBackup.map(r=>r.slice());
+    /* beginDraw() pushed an undo snapshot; remove that cancelled stroke snapshot. */
+    if(undoStack.length) undoStack.pop();
+    redoStack=[];
+  }
+  touchStrokeBackup=null;
+  touchDrawingStarted=false;
+  drawing=false;
+  lastCell=null;
+  draw();
+}
+canvas.addEventListener("touchstart",e=>{
+  if(e.touches.length>=2){
+    e.preventDefault();
+    cancelTouchStrokeForGesture();
+    gesture=true;
+    return;
+  }
+  if(e.touches.length===1){
+    e.preventDefault();
+    gesture=false;
+    touchStrokeBackup=clonePix();
+    touchStartEvent=cloneTouchEvent(e);
+    touchDrawingStarted=false;
+    if(touchDrawTimer)clearTimeout(touchDrawTimer);
+    touchDrawTimer=setTimeout(()=>{
+      touchDrawTimer=null;
+      if(!gesture && touchStartEvent){
+        touchDrawingStarted=true;
+        beginDraw(touchStartEvent);
+      }
+    },120);
+  }
+},{passive:false});
+canvas.addEventListener("touchmove",e=>{
+  if(e.touches.length>=2){
+    e.preventDefault();
+    cancelTouchStrokeForGesture();
+    gesture=true;
+    return;
+  }
+  if(e.touches.length===1){
+    e.preventDefault();
+    if(touchDrawingStarted&&!gesture)moveDraw(e);
+    /* Before the 120ms decision window, do nothing: this prevents pinch-start dots. */
+  }
+},{passive:false});
+canvas.addEventListener("touchend",e=>{
+  if(touchDrawTimer){clearTimeout(touchDrawTimer);touchDrawTimer=null}
+  if(!touchDrawingStarted && touchStartEvent && !gesture && e.touches.length===0){
+    /* A quick one-finger tap should still draw exactly one dot. */
+    touchDrawingStarted=true;
+    beginDraw(touchStartEvent);
+  }
+  endDraw();
+  touchStartEvent=null;
+  touchStrokeBackup=null;
+  touchDrawingStarted=false;
+  if(e.touches.length===0)setTimeout(()=>gesture=false,60);
+},{passive:false});
+canvas.addEventListener("touchcancel",e=>{
+  cancelTouchStrokeForGesture();
+  gesture=false;
+},{passive:false});
+function pinchStart(e){
+  if(e.touches.length!==2)return;
+  cancelTouchStrokeForGesture();
+  gesture=true;drawing=false;
+  const a=e.touches[0],b=e.touches[1];
+  pinch={d:Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY),z:zoom,cx:(a.clientX+b.clientX)/2,cy:(a.clientY+b.clientY)/2,px:panX,py:panY}
+}
+viewport.addEventListener("touchstart",e=>{if(e.touches.length===2){e.preventDefault();pinchStart(e)}},{passive:false});
+viewport.addEventListener("touchmove",e=>{
+  if(e.touches.length!==2||!pinch)return;
+  e.preventDefault();
+  cancelTouchStrokeForGesture();
+  gesture=true;
+  const a=e.touches[0],b=e.touches[1];
+  const d=Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);
+  const cx=(a.clientX+b.clientX)/2,cy=(a.clientY+b.clientY)/2;
+  const newZoom=Math.max(.5,Math.min(8,pinch.z*d/pinch.d));
+  /* Keep the point under the two-finger center stable while zooming,
+     while also following the fingers for natural two-finger panning. */
+  const ratio=newZoom/pinch.z;
+  const vr=viewport.getBoundingClientRect();
+  const anchorX=pinch.cx-vr.left;
+  const anchorY=pinch.cy-vr.top;
+  zoom=newZoom;
+  panX=anchorX-(anchorX-pinch.px)*ratio+(cx-pinch.cx);
+  panY=anchorY-(anchorY-pinch.py)*ratio+(cy-pinch.cy);
+  draw();
+},{passive:false});
+viewport.addEventListener("touchend",e=>{if(e.touches.length<2)pinch=null;if(e.touches.length===0)setTimeout(()=>gesture=false,30)},{passive:false});
+function zoomBy(f){zoom=Math.max(.5,Math.min(8,zoom*f));draw()}
+$("#zin").onclick=()=>zoomBy(1.25);$("#zout").onclick=()=>zoomBy(.8);$("#pzin").onclick=()=>zoomBy(1.25);$("#pzout").onclick=()=>zoomBy(.8);
+function previewMove(e){const t=e.touches?e.touches[0]:e,r=preview.getBoundingClientRect(),rx=(t.clientX-r.left)/r.width,ry=(t.clientY-r.top)/r.height,side=N*fitBase()*zoom;panX=viewport.clientWidth/2-rx*side;panY=viewport.clientHeight/2-ry*side;draw()}
+let prevDrag=false;preview.addEventListener("mousedown",e=>{prevDrag=true;previewMove(e)});window.addEventListener("mousemove",e=>{if(prevDrag)previewMove(e)});window.addEventListener("mouseup",()=>prevDrag=false);
+preview.addEventListener("touchstart",e=>{e.preventDefault();previewMove(e)},{passive:false});preview.addEventListener("touchmove",e=>{e.preventDefault();previewMove(e)},{passive:false});
+$$("[data-tool]").forEach(b=>b.onclick=()=>setTool(b.dataset.tool));
+$("#sym").onclick=()=>{symmetry=!symmetry;$("#sym").classList.toggle("active",symmetry)};
+$("#grid").onclick=()=>{grid=!grid;$("#grid").classList.toggle("active",grid);$("#grid").textContent=grid?"マス目ON":"マス目OFF";draw()};
+$("#undo").onclick=()=>{if(!undoStack.length)return;redoStack.push(clonePix());pixels=undoStack.pop();draw()};
+$("#redo").onclick=()=>{if(!redoStack.length)return;undoStack.push(clonePix());pixels=redoStack.pop();draw()};
+$("#clear").onclick=()=>{pushUndo();pixels=blank();draw()};
+$("#copy").onclick=()=>{if(!selection)return;clipboard=Array.from({length:selection.h},(_,y)=>pixels[selection.y+y].slice(selection.x,selection.x+selection.w))};
+$("#paste").onclick=()=>{if(!clipboard)return;pushUndo();let ox=selection?selection.x:0,oy=selection?selection.y:0;for(let y=0;y<clipboard.length;y++)for(let x=0;x<clipboard[y].length;x++)if(oy+y<N&&ox+x<N)pixels[oy+y][ox+x]=clipboard[y][x];draw()};
+picker.oninput=e=>chooseColor(e.target.value.toUpperCase());bgPicker.oninput=e=>{bg=e.target.value.toUpperCase();draw()};
+$("#fav").onclick=()=>{favorites=[color,...favorites.filter(x=>x!==color)].slice(0,8);saveFavorites();renderSmallColors()};
+function changeSize(n){if(n===N)return;pushUndo();let old=pixels,oldN=N;N=n;pixels=blank();for(let y=0;y<Math.min(oldN,N);y++)for(let x=0;x<Math.min(oldN,N);x++)pixels[y][x]=old[y][x];zoom=1;panX=panY=0;$$("[data-size]").forEach(b=>b.classList.toggle("active",+b.dataset.size===N));draw()}
+$$("[data-size]").forEach(b=>b.onclick=()=>changeSize(+b.dataset.size));
+function exportCanvas(){const c=document.createElement("canvas");c.width=N;c.height=N;const q=c.getContext("2d");for(let y=0;y<N;y++)for(let x=0;x<N;x++)if(pixels[y][x]){q.fillStyle=pixels[y][x];q.fillRect(x,y,1,1)}return c}
+function safeFileName(raw){
+  raw=(raw||"").trim();
+  if(!raw)return "";
+  return raw.replace(/[\/:*?"<>|]+/g,"_").replace(/\.png$/i,"");
+}
+$("#savePng").onclick=()=>{
+  try{
+    const out=exportCanvas();
+    const dataUrl=out.toDataURL("image/png");
+    const defaultName="pixel_art.png";
+
+    /* iPhone/iPad Safari reliably reacts to a direct user-tap download.
+       The Files sheet shown by Safari can then be pointed at OneDrive. */
+    const a=document.createElement("a");
+    a.href=dataUrl;
+    a.download=defaultName;
+    a.setAttribute("target","_blank");
+    a.style.display="none";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+
+    /* Some iOS WebViews ignore download=. In that case open the PNG itself,
+       from which Share → Save to Files → OneDrive can be used. */
+    setTimeout(()=>{
+      if(document.visibilityState==="visible"){
+        const w=window.open(dataUrl,"_blank");
+        if(!w){
+          alert("保存画面が開かない場合は、SafariでこのHTMLを開いて「PNG保存」を押してください。");
+        }
+      }
+    },350);
+  }catch(err){
+    console.error(err);
+    alert("PNG保存に失敗しました。Safariで開いてもう一度お試しください。");
+  }
+};
+$("#loadJson").onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const d=JSON.parse(r.result);N=+d.size||32;pixels=d.pixels;zoom=1;panX=panY=0;$$("[data-size]").forEach(b=>b.classList.toggle("active",+b.dataset.size===N));draw()}catch(_){alert("JSONを読み込めませんでした")}};r.readAsText(f);e.target.value=""};
+$("#loadPng").onchange=e=>{const f=e.target.files[0];if(!f)return;const img=new Image();img.onload=()=>{const c=document.createElement("canvas");c.width=N;c.height=N;const q=c.getContext("2d");q.imageSmoothingEnabled=false;q.clearRect(0,0,N,N);q.drawImage(img,0,0,N,N);const d=q.getImageData(0,0,N,N).data;pixels=blank();for(let y=0;y<N;y++)for(let x=0;x<N;x++){let i=(y*N+x)*4;if(d[i+3]>20)pixels[y][x]=`#${[d[i],d[i+1],d[i+2]].map(v=>v.toString(16).padStart(2,"0")).join("").toUpperCase()}`}URL.revokeObjectURL(img.src);draw()};img.src=URL.createObjectURL(f);e.target.value=""};
+function thumbDraw(c,p){c.width=N;c.height=N;let q=c.getContext("2d");q.clearRect(0,0,N,N);if(!p)return;for(let y=0;y<Math.min(N,p.length);y++)for(let x=0;x<Math.min(N,p[y].length);x++)if(p[y][x]){q.fillStyle=p[y][x];q.fillRect(x,y,1,1)}}
+function renderSlots(){const box=$("#slots");box.innerHTML="";for(let i=0;i<50;i++){const b=document.createElement("button");b.className="slot"+(selectedSlot===i?" selected":"");const s=document.createElement("span");s.textContent=i+1;const c=document.createElement("canvas");thumbDraw(c,slots[i]?.pixels||null);b.append(s,c);b.onclick=()=>{selectedSlot=i;renderSlots()};box.append(b)}}
+$("#slotSave").onclick=()=>{let i=selectedSlot;if(i===null)i=slots.findIndex(x=>!x);if(i<0)i=0;slots[i]={size:N,pixels:clonePix()};selectedSlot=i;localStorage.setItem("pixelSlots50",JSON.stringify(slots));renderSlots()};
+$("#slotLoad").onclick=()=>{if(selectedSlot===null||!slots[selectedSlot])return;let s=slots[selectedSlot];N=s.size;pixels=s.pixels.map(r=>r.slice());zoom=1;panX=panY=0;$$("[data-size]").forEach(b=>b.classList.toggle("active",+b.dataset.size===N));draw()};
+$("#slotBg").onclick=()=>{if(selectedSlot===null||!slots[selectedSlot])return;bgRef=slots[selectedSlot].pixels.map(r=>r.slice());draw()};
+$("#slotDelete").onclick=()=>{if(selectedSlot===null)return;slots[selectedSlot]=null;localStorage.setItem("pixelSlots50",JSON.stringify(slots));renderSlots()};
+$("#bgReset").onclick=()=>{bgRef=null;draw()};
+document.addEventListener("pointerdown",e=>{let b=e.target.closest("button,.filebtn");if(b)b.classList.add("pressed")});
+document.addEventListener("pointerup",()=>$$(".pressed").forEach(b=>setTimeout(()=>b.classList.remove("pressed"),80)));
+const rail=$("#rail"),thumb=$("#thumb");let rd=false;
+function railRefresh(){let total=Math.max(document.body.scrollHeight,document.documentElement.scrollHeight),view=innerHeight,rh=rail.clientHeight,th=Math.max(44,rh*Math.min(1,view/Math.max(view,total))),max=total-view,mt=rh-th;thumb.style.height=th+"px";thumb.style.top=(max?scrollY/max*mt:0)+"px"}
+function railGo(y){let r=rail.getBoundingClientRect(),th=thumb.offsetHeight,mt=Math.max(1,r.height-th),top=Math.max(0,Math.min(mt,y-r.top-th/2)),total=Math.max(document.body.scrollHeight,document.documentElement.scrollHeight);scrollTo(0,top/mt*Math.max(0,total-innerHeight))}
+rail.addEventListener("pointerdown",e=>{rd=true;rail.setPointerCapture?.(e.pointerId);railGo(e.clientY)});rail.addEventListener("pointermove",e=>{if(rd)railGo(e.clientY)});rail.addEventListener("pointerup",()=>rd=false);addEventListener("scroll",railRefresh,{passive:true});addEventListener("resize",()=>{draw();railRefresh()});
+try{favorites=JSON.parse(localStorage.getItem("pixelFavV1")||"[]");let s=JSON.parse(localStorage.getItem("pixelSlots50")||"null");if(Array.isArray(s))slots=s.slice(0,50);while(slots.length<50)slots.push(null)}catch(_){}
+initPixels();renderPalette();renderSmallColors();renderSlots();setTimeout(()=>{draw();railRefresh()},20);
+</script>
+</body>
+</html>
